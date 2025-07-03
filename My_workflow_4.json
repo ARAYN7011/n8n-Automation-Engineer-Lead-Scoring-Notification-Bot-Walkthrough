@@ -1,0 +1,352 @@
+{
+  "name": "My workflow 4",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "aa4a4837-f29b-4bae-b302-425e7ab79a52",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        -20
+      ],
+      "id": "5c1acef3-90a5-4d3a-b662-3377d22e2a6f",
+      "name": "Webhook",
+      "webhookId": "aa4a4837-f29b-4bae-b302-425e7ab79a52"
+    },
+    {
+      "parameters": {
+        "jsCode": "const fields = items[0].json.body.data.fields;\n\nconst form = {};\n\nfor (const field of fields) {\n  const label = field.label.trim().toLowerCase();\n\n  // Handle normal fields\n  if (field.type.startsWith(\"INPUT\") || field.type === \"TEXTAREA\") {\n    form[label] = field.value;\n  }\n\n  // Handle dropdowns: get text from selected option\n  if (field.type === \"DROPDOWN\") {\n    const selectedId = field.value?.[0];\n    const selectedOption = field.options.find(opt => opt.id === selectedId);\n    form[label] = selectedOption?.text || \"\";\n  }\n}\n\n// Extract values using normalized field labels\nconst full_name = form[\"full name\"];\nconst email = form[\"email\"];\nconst budget = parseFloat(form[\"project budget in (£)\"]) || 0;\nconst interest_level = form[\"how interested are you in working with us?\"];\n\n// Validate required fields\nif (!full_name || !email || !budget || !interest_level) {\n  throw new Error(\"Missing required fields\");\n}\n\n// Score logic\nlet score = \"Cold\";\nif (budget > 5000 && interest_level.toLowerCase() === \"high\") {\n  score = \"Hot\";\n} else if (interest_level.toLowerCase() === \"medium\") {\n  score = \"Warm\";\n}\n\n// Final flat output for next steps\nitems[0].json = {\n  full_name,\n  email,\n  budget,\n  interest_level,\n  score\n};\n\nreturn items;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -20,
+        -20
+      ],
+      "id": "4f1d3ade-f4ce-4195-b21c-a5db37b006b8",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = items[0].json;\n\nlet score = 'Cold';\n\nif (lead.budget >= 5000 && lead.interest_level.toLowerCase() === 'high') {\n  score = 'Hot';\n} else if (lead.budget >= 1000 || lead.interest_level.toLowerCase() === 'medium') {\n  score = 'Warm';\n}\n\nreturn [\n  {\n    json: {\n      ...lead,\n      score\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        -20
+      ],
+      "id": "d7bf25a9-e299-4438-849a-0aea90712d23",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e612e510-47be-4820-bea7-0e5cf35dd160",
+              "leftValue": "={{ $json.Score }}",
+              "rightValue": "Hot",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        640,
+        -20
+      ],
+      "id": "d4cecdbe-377e-4c43-90a6-315ef948d82a",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0945T1Q88M",
+          "mode": "list",
+          "cachedResultName": "all-test"
+        },
+        "text": "=New Hot Lead: {{ $json.Name }}, Budget £{{ $json.Budget }}, Interest: {{ $json[\"Intrest Level\"] }} – Check Google sheets for details.",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        940,
+        -160
+      ],
+      "id": "e8fa3f9c-7ad6-455c-8d31-0d7e8100da28",
+      "name": "Send a message",
+      "webhookId": "f11854bb-7ed7-443c-b4bc-73d82251f1c8",
+      "credentials": {
+        "slackApi": {
+          "id": "HP1u2l6T2UYGp1Xz",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1160,
+        -160
+      ],
+      "id": "3b8b451b-cf77-41c4-a4e8-cd06836de528",
+      "name": "Wait",
+      "webhookId": "c6315524-a88e-44bc-b4d3-7807db3644a7"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        960,
+        40
+      ],
+      "id": "37cf3a4a-76b0-4724-be71-7efc39a6ffcf",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Code').item.json.email }}",
+        "subject": "Ready to Talk About Your Goals?",
+        "emailType": "text",
+        "message": "=Hi {{ $('Code').item.json.full_name }},\n\nThank you for sharing your interest in our solutions! We’re excited about your £{{ $('Code').item.json.budget }} project and your {{ $('Code').item.json.interest_level }} level of interest. \n\nLet’s take the next step to explore how we can help you achieve your goals. Could we schedule a quick call to discuss your needs? Reply to this email to book a time.\n\nLooking forward to connecting soon!\n\nBest regards,  \nREM Waste",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1380,
+        -160
+      ],
+      "id": "b6add3a2-7f73-41b7-8bcc-63f14f80def9",
+      "name": "Send a message1",
+      "webhookId": "5c22c75b-b6f9-4b64-bc03-e37dc4350521",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "eiRqOORDspYxtK2F",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1u2FSoZbsOA0oRAP-alMWNtnluhy2BSOr_J2sYpHZH0I",
+          "mode": "list",
+          "cachedResultName": "REM LEADS🔥",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1u2FSoZbsOA0oRAP-alMWNtnluhy2BSOr_J2sYpHZH0I/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1u2FSoZbsOA0oRAP-alMWNtnluhy2BSOr_J2sYpHZH0I/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Name": "={{ $json.full_name }}",
+            "Email": "={{ $json.email }}",
+            "Budget": "={{ $json.budget }}",
+            "Intrest Level": "={{ $json.interest_level }}",
+            "Score": "={{ $json.score }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Budget",
+              "displayName": "Budget",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Intrest Level",
+              "displayName": "Intrest Level",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Score",
+              "displayName": "Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        420,
+        -20
+      ],
+      "id": "ccbbbd63-16bb-4007-9328-03772d68bc6a",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Bmu0xQkN8LMH65wW",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "dd9aa103-9ee2-4cb2-9df9-62db99a6050b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f51baf21d10f64f9691279124391f0186dd34294d388ffaa853f7a6b153b75bf"
+  },
+  "id": "74hBFy2YfWx7dINn",
+  "tags": []
+}
